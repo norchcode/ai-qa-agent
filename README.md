@@ -6,9 +6,33 @@
 
 An AI-powered QA automation agent that combines LLM capabilities with traditional testing tools to create, execute, and analyze tests.
 
+![AI QA Agent Demo](https://via.placeholder.com/800x400?text=AI+QA+Agent+Demo)
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Repository Structure](#-repository-structure)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+  - [Environment Variables](#environment-variables)
+  - [Configuration File](#configuration-file)
+- [Usage](#-usage)
+  - [Web UI](#web-ui)
+  - [Unified Interface](#unified-interface)
+  - [API Usage](#api-usage)
+- [File and Image Processing](#-file-and-image-processing)
+- [Mobile Testing](#-mobile-testing)
+- [Reporting](#-reporting)
+- [LLM Provider Configuration](#-llm-provider-configuration)
+- [Development](#-development)
+- [License](#-license)
+- [Acknowledgements](#-acknowledgements)
+
 ## ✨ Features
 
-- 🧠 **LLM Integration**: Support for multiple LLM providers (Groq, Hyperbolic.xyz, Ollama, LM Studio)
+- 🧠 **LLM Integration**: Support for multiple LLM providers (Groq, OpenAI, Anthropic, Ollama)
+- 🤖 **Unified Interface**: Single input prompt to access all tools and functionalities
+- 📁 **File Upload**: Support for uploading and processing various file types (images, PDFs, text files)
 - 📱 **Mobile Testing**: Appium integration with scrcpy for Android device testing
 - 📊 **Visual Testing**: Screenshot comparison, OCR, and UI/UX analysis
 - 📝 **Test Generation**: Create test cases from requirements or user stories
@@ -17,26 +41,183 @@ An AI-powered QA automation agent that combines LLM capabilities with traditiona
 - 📈 **Reporting**: Detailed PDF, interactive HTML, and executive summary reports
 - 🔄 **History Tracking**: Persistent storage of test execution history
 
-## 🚀 Quick Start
+## 🗂️ Repository Structure
 
-### Installation
+The repository is organized into the following structure:
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/ai-qa-agent.git
-cd ai-qa-agent
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install additional dependencies for image processing
-pip install pillow opencv-python-headless pytesseract
+```
+ai-qa-agent/
+├── config/                 # Configuration files
+│   └── default_config.json # Default configuration
+├── docs/                   # Documentation
+│   ├── api.md              # API documentation
+│   ├── repository_structure.md # File structure documentation
+│   └── ...
+├── src/                    # Source code
+│   ├── core/               # Core components
+│   │   ├── agent.py
+│   │   ├── controller.py
+│   │   ├── history_manager.py
+│   │   └── llm_integration.py
+│   ├── tools/              # Testing and analysis tools
+│   │   ├── android_device.py
+│   │   ├── gherkin_translator.py
+│   │   ├── qa_tools_database.py
+│   │   ├── report_generator.py
+│   │   ├── scrcpy_controller.py
+│   │   ├── tool_recommender.py
+│   │   └── visual_testing.py
+│   ├── ui/                 # User interface components
+│   │   └── webui_enhanced.py
+│   └── utils/              # Utility functions and helpers
+│       ├── api.py
+│       └── logger.py
+├── tests/                  # Test files
+│   ├── sample_files/       # Sample files for testing
+│   └── ...
+├── LICENSE
+├── README.md
+└── requirements.txt
 ```
 
-### Basic Usage
+For more details on the repository structure, see [Repository Structure Documentation](docs/repository_structure.md).
+
+## 🚀 Installation
+
+### Prerequisites
+
+- Python 3.10 or higher
+- pip (Python package installer)
+- For image processing: Tesseract OCR
+- For mobile testing: Appium and Android SDK
+
+### Steps
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/norchcode/ai-qa-agent.git
+cd ai-qa-agent
+```
+
+2. Create and activate a virtual environment (recommended):
+
+```bash
+python -m venv venv
+# On Windows
+venv\Scripts\activate
+# On macOS/Linux
+source venv/bin/activate
+```
+
+3. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Create a `.env` file (see [Configuration](#-configuration) section)
+
+5. Run the application:
+
+```bash
+python -m src.main
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# LLM Provider Configuration
+LLM_PROVIDER=groq  # Options: groq, openai, anthropic, ollama
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama3-70b-8192
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4
+ANTHROPIC_API_KEY=your_anthropic_api_key
+ANTHROPIC_MODEL=claude-3-opus-20240229
+
+# Web UI Configuration
+WEBUI_HOST=127.0.0.1
+WEBUI_PORT=7788
+WEBUI_THEME=Ocean  # Options: Ocean, Soft, Glass, Default
+
+# Browser Configuration
+BROWSER_TYPE=chromium  # Options: chromium, firefox, webkit
+HEADLESS=false
+BROWSER_RESOLUTION=1920,1080
+
+# Report Configuration
+REPORT_FORMAT=pdf  # Options: pdf, html, json
+REPORT_INCLUDE_SCREENSHOTS=true
+REPORT_INCLUDE_VIDEOS=true
+
+# Logging Configuration
+LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FILE=./logs/ai_qa_agent.log
+
+# Database Configuration
+DATABASE_PATH=./data/history.db
+```
+
+### Configuration File
+
+Alternatively, you can use the configuration file at `config/default_config.json`:
+
+```json
+{
+    "llm_provider": "groq",
+    "groq_api_key": "",
+    "groq_model": "llama3-70b-8192",
+    "browser_type": "chromium",
+    "headless": false,
+    "browser_resolution": "1920,1080",
+    "report_format": "pdf",
+    "include_screenshots": true,
+    "include_videos": true,
+    "log_level": "INFO",
+    "log_file": "./logs/ai_qa_agent.log",
+    "database_path": "./data/history.db"
+}
+```
+
+Environment variables take precedence over the configuration file.
+
+## 🖥️ Usage
+
+### Web UI
+
+Start the web UI with:
+
+```bash
+python -m src.ui.webui_enhanced
+```
+
+This will start the Gradio-based web interface at http://127.0.0.1:7788 (or the configured host/port).
+
+### Unified Interface
+
+The AI QA Agent features a unified interface that allows you to interact with all tools through a single input prompt. You can:
+
+- Ask questions about testing
+- Analyze test cases by pasting them or uploading files
+- Generate tests from requirements descriptions
+- Process and analyze images/screenshots
+- Compare visual elements
+
+Example prompts:
+- "Analyze this test case for quality and coverage"
+- "Generate test cases for a user registration form"
+- "Compare these two screenshots and highlight the differences"
+- "Convert these steps to Gherkin format"
+
+### API Usage
 
 ```python
-from src.api import aiqa
+from src.utils.api import aiqa
 
 # Analyze a test case
 test_case = """
@@ -58,8 +239,12 @@ print(result)
 analysis = aiqa.analyze_image("/path/to/screenshot.png")
 print(analysis)
 
-# Start the web UI
-aiqa.start_webui()
+# Use the unified interface
+response = aiqa.process_unified_request(
+    "Generate test cases for a login form",
+    files=[]
+)
+print(response)
 ```
 
 ## 📊 File and Image Processing
@@ -87,10 +272,10 @@ See [File and Image Processing Documentation](docs/file_image_processing.md) for
 The AI QA Agent integrates with Appium and scrcpy for mobile testing:
 
 ```python
-from src.appium_device import AppiumDevice
+from src.tools.android_device import AndroidDevice
 
 # Initialize device
-device = AppiumDevice()
+device = AndroidDevice()
 
 # Start Appium session
 device.start_session()
@@ -111,7 +296,7 @@ device.end_session()
 Generate comprehensive test reports:
 
 ```python
-from src.report_generator import ReportGenerator
+from src.tools.report_generator import ReportGenerator
 
 # Initialize report generator
 report_gen = ReportGenerator()
@@ -136,7 +321,7 @@ Configure different LLM providers:
 
 ```python
 # Change LLM provider
-aiqa.change_llm_provider("hyperbolic", api_key="your-api-key")
+aiqa.change_llm_provider("openai", api_key="your-api-key")
 
 # Get available providers
 providers = aiqa.get_available_providers()
@@ -175,13 +360,26 @@ mkdocs build
 mkdocs serve
 ```
 
+### Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgements
 
 - [Groq](https://groq.com/) for their LLM API
+- [OpenAI](https://openai.com/) for their GPT models
+- [Anthropic](https://www.anthropic.com/) for their Claude models
+- [Gradio](https://gradio.app/) for the web UI framework
 - [Appium](https://appium.io/) for mobile testing capabilities
 - [scrcpy](https://github.com/Genymobile/scrcpy) for Android device mirroring
 - [OpenCV](https://opencv.org/) for image processing capabilities

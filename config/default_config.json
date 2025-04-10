@@ -1,0 +1,14 @@
+{
+    "llm_provider": "groq",
+    "groq_api_key": "",
+    "groq_model": "llama3-70b-8192",
+    "browser_type": "chromium",
+    "headless": false,
+    "browser_resolution": "1920,1080",
+    "report_format": "pdf",
+    "include_screenshots": true,
+    "include_videos": true,
+    "log_level": "INFO",
+    "log_file": "./logs/ai_qa_agent.log",
+    "database_path": "./data/history.db"
+}

@@ -1,0 +1,12 @@
+1. Navigate to the login page
+2. Enter username "admin" in the username field
+3. Enter password "admin123" in the password field
+4. Click the login button
+5. Verify that the dashboard page is displayed
+6. Check that the user profile shows "Admin User"
+7. Navigate to the settings page
+8. Change the theme to "Dark Mode"
+9. Save the settings
+10. Verify that the theme has been applied correctly
+11. Log out of the application
+12. Verify that you are redirected to the login page

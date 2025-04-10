@@ -1,56 +1,50 @@
 # AI QA Agent Requirements
 
-## Python Packages
 # Core dependencies
-testzeus-hercules>=1.0.0
-playwright>=1.40.0
-gradio>=4.0.0
 fastapi>=0.100.0
-uvicorn>=0.23.0
+gradio>=4.0.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
+uvicorn>=0.23.0
 
 # LLM Integration
-groq>=0.4.0
-langchain>=0.1.0
-langchain-groq>=0.0.1
-
-# Testing and Analysis
-pytest>=7.0.0
-pytest-playwright>=0.4.0
-gherkin-official>=24.0.0
-behave>=1.2.6
-
-# Visualization and Reporting
-reportlab>=4.0.0
-jinja2>=3.1.0
-matplotlib>=3.7.0
-pillow>=10.0.0
-
-# Utilities
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-numpy>=1.24.0
-pandas>=2.0.0
 groq==0.4.1
+langchain>=0.1.0
 langchain-groq==0.1.5
 openai==1.12.0
 ollama==0.1.6
+
+# Testing and Analysis
+appium-python-client==3.1.0
+behave>=1.2.6
+gherkin-official>=24.0.0
+playwright>=1.40.0
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-playwright>=0.4.0
+selenium==4.15.2
+
+# Document Processing
 PyPDF2==3.0.1
 python-docx==1.1.0
-beautifulsoup4==4.12.2
 chardet==5.2.0
 pyyaml==6.0.1
-xmltodict==0.13.0
 toml==0.10.2
+xmltodict==0.13.0
+
+# Visualization and Reporting
+jinja2==3.1.2
+matplotlib==3.8.2
 pillow==10.1.0
+reportlab==4.0.8
+
+# Image Processing
 opencv-python-headless==4.8.1.78
 pytesseract==0.3.10
 scikit-image==0.22.0
-matplotlib==3.8.2
-reportlab==4.0.8
-jinja2==3.1.2
-pytest==7.4.3
-pytest-cov==4.1.0
-selenium==4.15.2
-appium-python-client==3.1.0
+
+# Data Processing
+beautifulsoup4==4.12.2
+numpy>=1.24.0
+pandas>=2.0.0
+requests>=2.31.0
