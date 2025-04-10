@@ -1,6 +1,6 @@
 # AI QA Agent
 
-[![CI Status](https://github.com/yourusername/ai-qa-agent/workflows/AI%20QA%20Agent%20CI/badge.svg)](https://github.com/yourusername/ai-qa-agent/actions)
+[![CI Status](https://github.com/norchcode/ai-qa-agent/workflows/AI%20QA%20Agent%20CI/badge.svg)](https://github.com/yourusername/ai-qa-agent/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
