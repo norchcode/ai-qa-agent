@@ -9,14 +9,14 @@ import tempfile
 from pathlib import Path
 
 # Import all tool modules
-from test_case_analyzer import TestCaseAnalyzer
-from gherkin_translator import GherkinTranslator
-from test_executor import TestExecutor
-from visual_testing import VisualTesting
-from history_manager import HistoryManager
-from report_generator import ReportGenerator
-from appium_manager import AppiumManager
-from llm_integration import LLMProvider
+from ..tools.test_case_analyzer import TestCaseAnalyzer
+from ..tools.gherkin_translator import GherkinTranslator
+from ..tools.test_executor import TestExecutor
+from ..tools.visual_testing import VisualTesting
+from ..core.history_manager import HistoryManager
+from ..tools.report_generator import ReportGenerator
+from ..tools.appium_manager import AppiumManager
+from ..core.llm_integration import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -394,19 +394,19 @@ class AIQAAgentController:
     
     def compare_screenshots(self, baseline_path: str, current_path: str, diff_path: str = None) -> Dict[str, Any]:
         """
-        Compare two screenshots and generate a difference image.
+        Compare two screenshots and return differences.
         
         Args:
             baseline_path: Path to the baseline screenshot.
             current_path: Path to the current screenshot.
-            diff_path: Path to save the difference image. If None, a temporary file is used.
+            diff_path: Optional path to save the difference image.
             
         Returns:
             Dictionary containing comparison results.
         """
         logger.info(f"Comparing screenshots: {baseline_path} vs {current_path}")
-        results = self.visual_testing.compare_screenshots(baseline_path, current_path, diff_path)
-        return results
+        comparison = self.visual_testing.compare_screenshots(baseline_path, current_path, diff_path)
+        return comparison
     
     def extract_text_from_screenshot(self, screenshot_path: str) -> str:
         """
@@ -422,22 +422,6 @@ class AIQAAgentController:
         text = self.visual_testing.extract_text(screenshot_path)
         return text
     
-    def generate_heatmap(self, interaction_data: Dict[str, Any], screenshot_path: str, output_path: str = None) -> str:
-        """
-        Generate a heatmap visualization of user interactions.
-        
-        Args:
-            interaction_data: Dictionary containing interaction data.
-            screenshot_path: Path to the screenshot to overlay the heatmap on.
-            output_path: Path to save the heatmap image. If None, a temporary file is used.
-            
-        Returns:
-            Path to the generated heatmap image.
-        """
-        logger.info("Generating interaction heatmap")
-        heatmap_path = self.visual_testing.generate_heatmap(interaction_data, screenshot_path, output_path)
-        return heatmap_path
-    
     # Mobile Testing Methods
     
     def start_appium_server(self) -> bool:
@@ -445,50 +429,31 @@ class AIQAAgentController:
         Start the Appium server.
         
         Returns:
-            True if the server was started successfully, False otherwise.
+            True if server started successfully, False otherwise.
         """
         logger.info("Starting Appium server")
-        success = self.appium_manager.start_server()
-        return success
+        return self.appium_manager.start_server()
     
     def stop_appium_server(self) -> bool:
         """
         Stop the Appium server.
         
         Returns:
-            True if the server was stopped successfully, False otherwise.
+            True if server stopped successfully, False otherwise.
         """
         logger.info("Stopping Appium server")
-        success = self.appium_manager.stop_server()
-        return success
+        return self.appium_manager.stop_server()
     
-    def connect_to_device(self, device_id: str = None) -> Dict[str, Any]:
+    def connect_to_device(self) -> Dict[str, Any]:
         """
         Connect to a mobile device.
         
-        Args:
-            device_id: Optional device ID. If not provided, connects to the first available device.
-            
         Returns:
             Dictionary containing device information.
         """
-        logger.info(f"Connecting to device: {device_id or 'first available'}")
-        device_info = self.appium_manager.connect_to_device(device_id)
+        logger.info("Connecting to device")
+        device_info = self.appium_manager.connect_to_device()
         return device_info
-    
-    def install_app(self, app_path: str) -> bool:
-        """
-        Install an app on the connected device.
-        
-        Args:
-            app_path: Path to the app file.
-            
-        Returns:
-            True if the app was installed successfully, False otherwise.
-        """
-        logger.info(f"Installing app: {app_path}")
-        success = self.appium_manager.install_app(app_path)
-        return success
     
     def launch_app(self, package_name: str, activity_name: str = None) -> bool:
         """
@@ -499,62 +464,32 @@ class AIQAAgentController:
             activity_name: Optional activity name to launch.
             
         Returns:
-            True if the app was launched successfully, False otherwise.
+            True if app launched successfully, False otherwise.
         """
         logger.info(f"Launching app: {package_name}")
-        success = self.appium_manager.launch_app(package_name, activity_name)
-        return success
+        return self.appium_manager.launch_app(package_name, activity_name)
     
-    def take_screenshot(self, output_path: str = None) -> str:
+    def start_recording(self) -> str:
         """
-        Take a screenshot of the connected device.
+        Start recording the device screen.
         
-        Args:
-            output_path: Path to save the screenshot. If None, a temporary file is used.
-            
         Returns:
-            Path to the screenshot file.
-        """
-        logger.info("Taking device screenshot")
-        screenshot_path = self.appium_manager.take_screenshot(output_path)
-        return screenshot_path
-    
-    def start_recording(self, output_path: str = None) -> str:
-        """
-        Start recording the connected device screen.
-        
-        Args:
-            output_path: Path to save the recording. If None, a temporary file is used.
-            
-        Returns:
-            Path where the recording will be saved.
+            Path to the recording file.
         """
         logger.info("Starting screen recording")
-        recording_path = self.appium_manager.start_recording(output_path)
-        return recording_path
-    
-    def stop_recording(self) -> str:
-        """
-        Stop recording the connected device screen.
-        
-        Returns:
-            Path to the recorded video file.
-        """
-        logger.info("Stopping screen recording")
-        recording_path = self.appium_manager.stop_recording()
-        return recording_path
+        return self.appium_manager.start_recording()
     
     # History Management Methods
     
     def get_test_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        Get recent test history.
+        Get test history from the database.
         
         Args:
-            limit: Maximum number of history items to return.
+            limit: Maximum number of history entries to return.
             
         Returns:
-            List of dictionaries containing history items.
+            List of history entries.
         """
         logger.info(f"Getting test history (limit: {limit})")
         history = self.history_manager.get_history(limit)
@@ -565,7 +500,7 @@ class AIQAAgentController:
         Get details for a specific test session.
         
         Args:
-            session_id: ID of the session to get details for.
+            session_id: ID of the test session.
             
         Returns:
             Dictionary containing session details.
@@ -579,8 +514,8 @@ class AIQAAgentController:
         Compare two test sessions.
         
         Args:
-            session_id1: ID of the first session.
-            session_id2: ID of the second session.
+            session_id1: ID of the first test session.
+            session_id2: ID of the second test session.
             
         Returns:
             Dictionary containing comparison results.
@@ -597,7 +532,7 @@ class AIQAAgentController:
             format: Export format (json, csv).
             
         Returns:
-            Path to the exported file.
+            Path to the export file.
         """
         logger.info(f"Exporting history to {format}")
         export_path = self.history_manager.export(format)

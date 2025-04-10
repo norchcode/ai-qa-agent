@@ -1,739 +1,362 @@
 """
-History Manager module for AI QA Agent.
-This module provides functionality for managing test execution history.
+History manager module for AI QA Agent.
 """
-import os
 import logging
-import json
-import datetime
 import sqlite3
+import json
+import os
+from typing import Dict, Any, List, Optional
+from datetime import datetime
 import csv
-import pandas as pd
-import matplotlib.pyplot as plt
-from typing import Dict, List, Any, Optional, Union
-from pathlib import Path
-
-from .test_session import TestSession
 
 logger = logging.getLogger(__name__)
 
 class HistoryManager:
-    """Class for managing test execution history."""
+    """
+    Manages test history and session data.
+    """
     
-    def __init__(self, storage_dir: Optional[str] = None, db_file: Optional[str] = None):
+    def __init__(self, database_path: str):
         """
-        Initialize the History Manager.
+        Initialize the history manager.
         
         Args:
-            storage_dir: Optional directory for storing session data. If not provided, will use default.
-            db_file: Optional SQLite database file. If not provided, will use default.
+            database_path: Path to the SQLite database file.
         """
-        self.storage_dir = storage_dir or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'history')
-        os.makedirs(self.storage_dir, exist_ok=True)
-        
-        self.db_file = db_file or os.path.join(self.storage_dir, 'history.db')
-        self._init_database()
-        
-        self.current_session = None
-        
-        logger.info(f"Initialized History Manager with storage directory: {self.storage_dir}")
+        self.database_path = database_path
+        self._ensure_database()
+        logger.info(f"History manager initialized with database at {database_path}")
     
-    def _init_database(self) -> None:
-        """Initialize the SQLite database."""
-        logger.info(f"Initializing history database: {self.db_file}")
+    def _ensure_database(self):
+        """Ensure the database exists and has the required tables."""
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
         
-        conn = sqlite3.connect(self.db_file)
+        # Connect to the database
+        conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
         # Create sessions table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
-            session_id TEXT PRIMARY KEY,
-            start_time TEXT NOT NULL,
-            end_time TEXT,
-            status TEXT NOT NULL,
-            total_tests INTEGER DEFAULT 0,
-            passed_tests INTEGER DEFAULT 0,
-            failed_tests INTEGER DEFAULT 0,
-            skipped_tests INTEGER DEFAULT 0,
-            metadata TEXT,
-            data_file TEXT
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            date TEXT,
+            test_path TEXT,
+            status TEXT,
+            pass_rate REAL,
+            results TEXT
         )
         ''')
         
-        # Create test_results table
+        # Create actions table
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS test_results (
+        CREATE TABLE IF NOT EXISTS actions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            test_file TEXT NOT NULL,
-            status TEXT NOT NULL,
-            execution_time REAL,
-            error_message TEXT,
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (session_id) REFERENCES sessions (session_id)
-        )
-        ''')
-        
-        # Create screenshots table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS screenshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            path TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            metadata TEXT,
-            FOREIGN KEY (session_id) REFERENCES sessions (session_id)
+            action_type TEXT,
+            prompt TEXT,
+            result TEXT,
+            timestamp TEXT
         )
         ''')
         
         conn.commit()
         conn.close()
     
-    def start_session(self, metadata: Optional[Dict[str, Any]] = None) -> TestSession:
+    def is_connected(self) -> bool:
         """
-        Start a new test session.
+        Check if the database connection is working.
         
-        Args:
-            metadata: Optional metadata for the session.
-            
         Returns:
-            New TestSession instance.
+            True if connected, False otherwise.
         """
-        logger.info("Starting new test session")
-        
-        self.current_session = TestSession(metadata=metadata)
-        return self.current_session
-    
-    def end_session(self, status: str = 'completed') -> None:
-        """
-        End the current test session.
-        
-        Args:
-            status: Final status of the session (completed, aborted, failed, etc.).
-        """
-        if not self.current_session:
-            logger.warning("No active session to end")
-            return
-        
-        logger.info(f"Ending session {self.current_session.session_id} with status {status}")
-        
-        self.current_session.end_session(status)
-        self._save_session(self.current_session)
-        self.current_session = None
-    
-    def _save_session(self, session: TestSession) -> None:
-        """
-        Save a session to the database and file system.
-        
-        Args:
-            session: TestSession to save.
-        """
-        logger.info(f"Saving session {session.session_id}")
-        
-        # Save session data to file
-        data_file = os.path.join(self.storage_dir, f"session_{session.session_id}.json")
-        with open(data_file, 'w') as f:
-            f.write(session.to_json())
-        
-        # Save session metadata to database
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-        
-        # Insert session record
-        cursor.execute('''
-        INSERT OR REPLACE INTO sessions (
-            session_id, start_time, end_time, status, 
-            total_tests, passed_tests, failed_tests, skipped_tests,
-            metadata, data_file
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            session.session_id,
-            session.start_time.isoformat(),
-            session.end_time.isoformat() if session.end_time else None,
-            session.status,
-            session.test_results.get('total_tests', 0),
-            session.test_results.get('passed_tests', 0),
-            session.test_results.get('failed_tests', 0),
-            session.test_results.get('skipped_tests', 0),
-            json.dumps(session.metadata),
-            data_file
-        ))
-        
-        # Insert test results
-        for test_file_result in session.test_results.get('test_files', []):
-            test_file = test_file_result.get('file_path', '')
-            result = test_file_result.get('result', {})
-            
-            cursor.execute('''
-            INSERT INTO test_results (
-                session_id, test_file, status, execution_time, error_message, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            ''', (
-                session.session_id,
-                test_file,
-                result.get('status', 'unknown'),
-                result.get('execution_time', 0.0),
-                result.get('error_message', ''),
-                datetime.datetime.now().isoformat()
-            ))
-        
-        # Insert screenshots
-        for screenshot in session.screenshots:
-            cursor.execute('''
-            INSERT INTO screenshots (
-                session_id, path, timestamp, metadata
-            ) VALUES (?, ?, ?, ?)
-            ''', (
-                session.session_id,
-                screenshot.get('path', ''),
-                screenshot.get('timestamp', datetime.datetime.now().isoformat()),
-                json.dumps(screenshot.get('metadata', {}))
-            ))
-        
-        conn.commit()
-        conn.close()
-    
-    def get_session(self, session_id: str) -> Optional[TestSession]:
-        """
-        Get a session by ID.
-        
-        Args:
-            session_id: ID of the session to get.
-            
-        Returns:
-            TestSession if found, None otherwise.
-        """
-        logger.info(f"Getting session {session_id}")
-        
-        # Check if it's the current session
-        if self.current_session and self.current_session.session_id == session_id:
-            return self.current_session
-        
-        # Check database
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-        SELECT data_file FROM sessions WHERE session_id = ?
-        ''', (session_id,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if not result:
-            logger.warning(f"Session {session_id} not found")
-            return None
-        
-        data_file = result[0]
-        
-        # Load session from file
         try:
-            with open(data_file, 'r') as f:
-                session_data = f.read()
-            
-            return TestSession.from_json(session_data)
-        except Exception as e:
-            logger.error(f"Error loading session {session_id}: {e}")
-            return None
-    
-    def get_sessions(self, limit: int = 100, offset: int = 0, 
-                    filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """
-        Get a list of sessions with pagination and filtering.
-        
-        Args:
-            limit: Maximum number of sessions to return.
-            offset: Offset for pagination.
-            filters: Optional filters to apply.
-            
-        Returns:
-            List of session metadata dictionaries.
-        """
-        logger.info(f"Getting sessions with limit={limit}, offset={offset}, filters={filters}")
-        
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-        
-        query = "SELECT * FROM sessions"
-        params = []
-        
-        # Apply filters
-        if filters:
-            where_clauses = []
-            
-            if 'status' in filters:
-                where_clauses.append("status = ?")
-                params.append(filters['status'])
-            
-            if 'start_date' in filters:
-                where_clauses.append("start_time >= ?")
-                params.append(filters['start_date'])
-            
-            if 'end_date' in filters:
-                where_clauses.append("start_time <= ?")
-                params.append(filters['end_date'])
-            
-            if where_clauses:
-                query += " WHERE " + " AND ".join(where_clauses)
-        
-        # Apply ordering and pagination
-        query += " ORDER BY start_time DESC LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        
-        cursor.execute(query, params)
-        
-        sessions = []
-        for row in cursor.fetchall():
-            sessions.append({
-                'session_id': row[0],
-                'start_time': row[1],
-                'end_time': row[2],
-                'status': row[3],
-                'total_tests': row[4],
-                'passed_tests': row[5],
-                'failed_tests': row[6],
-                'skipped_tests': row[7],
-                'metadata': json.loads(row[8]) if row[8] else {},
-                'data_file': row[9]
-            })
-        
-        conn.close()
-        
-        return sessions
-    
-    def delete_session(self, session_id: str) -> bool:
-        """
-        Delete a session.
-        
-        Args:
-            session_id: ID of the session to delete.
-            
-        Returns:
-            True if the session was deleted, False otherwise.
-        """
-        logger.info(f"Deleting session {session_id}")
-        
-        # Cannot delete current session
-        if self.current_session and self.current_session.session_id == session_id:
-            logger.warning(f"Cannot delete current session {session_id}")
-            return False
-        
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-        
-        # Get data file path
-        cursor.execute('''
-        SELECT data_file FROM sessions WHERE session_id = ?
-        ''', (session_id,))
-        
-        result = cursor.fetchone()
-        
-        if not result:
-            logger.warning(f"Session {session_id} not found")
+            conn = sqlite3.connect(self.database_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
             conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"Database connection error: {e}")
             return False
+    
+    def create_session(self, name: str, test_path: str, results: Dict[str, Any]) -> str:
+        """
+        Create a new test session.
         
-        data_file = result[0]
+        Args:
+            name: Name of the session.
+            test_path: Path to the test file or directory.
+            results: Test results dictionary.
+            
+        Returns:
+            Session ID.
+        """
+        # Generate a unique session ID
+        session_id = datetime.now().strftime("%Y%m%d%H%M%S")
         
-        # Delete from database
-        cursor.execute('''
-        DELETE FROM screenshots WHERE session_id = ?
-        ''', (session_id,))
+        # Calculate pass rate
+        total = results.get("total", 0)
+        passed = results.get("passed", 0)
+        pass_rate = (passed / total) * 100 if total > 0 else 0
         
-        cursor.execute('''
-        DELETE FROM test_results WHERE session_id = ?
-        ''', (session_id,))
+        # Determine status
+        if passed == total:
+            status = "Passed"
+        elif passed == 0:
+            status = "Failed"
+        else:
+            status = "Partial"
         
-        cursor.execute('''
-        DELETE FROM sessions WHERE session_id = ?
-        ''', (session_id,))
+        # Connect to the database
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        # Insert the session
+        cursor.execute(
+            "INSERT INTO sessions (id, name, date, test_path, status, pass_rate, results) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                session_id,
+                name,
+                datetime.now().isoformat(),
+                test_path,
+                status,
+                pass_rate,
+                json.dumps(results)
+            )
+        )
         
         conn.commit()
         conn.close()
         
-        # Delete data file
-        try:
-            if os.path.exists(data_file):
-                os.remove(data_file)
-        except Exception as e:
-            logger.error(f"Error deleting data file {data_file}: {e}")
-        
-        return True
+        logger.info(f"Created session {session_id} with name '{name}'")
+        return session_id
     
-    def get_session_statistics(self, time_range: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def get_session(self, session_id: str) -> Dict[str, Any]:
         """
-        Get statistics about test sessions.
+        Get details for a specific test session.
         
         Args:
-            time_range: Optional time range filter with 'start' and 'end' keys.
+            session_id: ID of the test session.
             
         Returns:
-            Dictionary containing statistics.
+            Dictionary containing session details.
         """
-        logger.info(f"Getting session statistics with time_range={time_range}")
-        
-        conn = sqlite3.connect(self.db_file)
+        # Connect to the database
+        conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
-        query = """
-        SELECT 
-            COUNT(*) as total_sessions,
-            SUM(total_tests) as total_tests,
-            SUM(passed_tests) as passed_tests,
-            SUM(failed_tests) as failed_tests,
-            SUM(skipped_tests) as skipped_tests,
-            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
-            COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_sessions,
-            COUNT(CASE WHEN status = 'aborted' THEN 1 END) as aborted_sessions
-        FROM sessions
-        """
-        
-        params = []
-        
-        # Apply time range filter
-        if time_range:
-            where_clauses = []
-            
-            if 'start' in time_range:
-                where_clauses.append("start_time >= ?")
-                params.append(time_range['start'])
-            
-            if 'end' in time_range:
-                where_clauses.append("start_time <= ?")
-                params.append(time_range['end'])
-            
-            if where_clauses:
-                query += " WHERE " + " AND ".join(where_clauses)
-        
-        cursor.execute(query, params)
+        # Get the session
+        cursor.execute(
+            "SELECT id, name, date, test_path, status, pass_rate, results FROM sessions WHERE id = ?",
+            (session_id,)
+        )
         
         row = cursor.fetchone()
-        
-        statistics = {
-            'total_sessions': row[0],
-            'total_tests': row[1] or 0,
-            'passed_tests': row[2] or 0,
-            'failed_tests': row[3] or 0,
-            'skipped_tests': row[4] or 0,
-            'completed_sessions': row[5],
-            'failed_sessions': row[6],
-            'aborted_sessions': row[7],
-            'success_rate': (row[2] or 0) / (row[1] or 1) * 100 if row[1] else 0
-        }
-        
         conn.close()
         
-        return statistics
+        if not row:
+            logger.warning(f"Session {session_id} not found")
+            return {}
+        
+        # Convert to dictionary
+        session = {
+            "id": row[0],
+            "name": row[1],
+            "date": row[2],
+            "test_path": row[3],
+            "status": row[4],
+            "pass_rate": row[5],
+            "results": json.loads(row[6])
+        }
+        
+        logger.info(f"Retrieved session {session_id}")
+        return session
     
-    def compare_sessions(self, session_ids: List[str]) -> Dict[str, Any]:
+    def get_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        Compare multiple test sessions.
+        Get test history from the database.
         
         Args:
-            session_ids: List of session IDs to compare.
+            limit: Maximum number of history entries to return.
+            
+        Returns:
+            List of history entries.
+        """
+        # Connect to the database
+        conn = sqlite3.connect(self.database_path)
+        cursor = conn.cursor()
+        
+        # Get the sessions
+        cursor.execute(
+            "SELECT id, name, date, test_path, status, pass_rate FROM sessions ORDER BY date DESC LIMIT ?",
+            (limit,)
+        )
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Convert to list of dictionaries
+        history = []
+        for row in rows:
+            history.append({
+                "id": row[0],
+                "name": row[1],
+                "date": row[2],
+                "test_path": row[3],
+                "status": row[4],
+                "pass_rate": row[5]
+            })
+        
+        logger.info(f"Retrieved {len(history)} history entries")
+        return history
+    
+    def compare_sessions(self, session_id1: str, session_id2: str) -> Dict[str, Any]:
+        """
+        Compare two test sessions.
+        
+        Args:
+            session_id1: ID of the first test session.
+            session_id2: ID of the second test session.
             
         Returns:
             Dictionary containing comparison results.
         """
-        logger.info(f"Comparing sessions: {session_ids}")
+        # Get the sessions
+        session1 = self.get_session(session_id1)
+        session2 = self.get_session(session_id2)
         
-        sessions = []
-        for session_id in session_ids:
-            session = self.get_session(session_id)
-            if session:
-                sessions.append(session)
+        if not session1 or not session2:
+            logger.warning(f"One or both sessions not found: {session_id1}, {session_id2}")
+            return {"error": "One or both sessions not found"}
         
-        if not sessions:
-            logger.warning("No valid sessions to compare")
-            return {'error': 'No valid sessions to compare'}
-        
-        # Prepare comparison data
+        # Compare the sessions
         comparison = {
-            'sessions': [],
-            'test_results': {},
-            'performance': {},
-            'summary': {}
+            "session1": {
+                "id": session1["id"],
+                "name": session1["name"],
+                "date": session1["date"],
+                "status": session1["status"],
+                "pass_rate": session1["pass_rate"]
+            },
+            "session2": {
+                "id": session2["id"],
+                "name": session2["name"],
+                "date": session2["date"],
+                "status": session2["status"],
+                "pass_rate": session2["pass_rate"]
+            },
+            "differences": {
+                "pass_rate": session2["pass_rate"] - session1["pass_rate"],
+                "status_changed": session1["status"] != session2["status"]
+            }
         }
-        
-        # Add session metadata
-        for session in sessions:
-            comparison['sessions'].append({
-                'session_id': session.session_id,
-                'start_time': session.start_time.isoformat(),
-                'end_time': session.end_time.isoformat() if session.end_time else None,
-                'duration': session.get_duration(),
-                'status': session.status,
-                'total_tests': session.test_results.get('total_tests', 0),
-                'passed_tests': session.test_results.get('passed_tests', 0),
-                'failed_tests': session.test_results.get('failed_tests', 0),
-                'skipped_tests': session.test_results.get('skipped_tests', 0)
-            })
         
         # Compare test results
-        all_test_files = set()
-        for session in sessions:
-            for test_file_result in session.test_results.get('test_files', []):
-                test_file = test_file_result.get('file_path', '')
-                all_test_files.add(test_file)
+        results1 = session1["results"]
+        results2 = session2["results"]
         
-        for test_file in all_test_files:
-            comparison['test_results'][test_file] = {}
-            
-            for session in sessions:
-                session_id = session.session_id
-                comparison['test_results'][test_file][session_id] = None
-                
-                for test_file_result in session.test_results.get('test_files', []):
-                    if test_file_result.get('file_path', '') == test_file:
-                        comparison['test_results'][test_file][session_id] = test_file_result.get('result', {})
+        test_diffs = []
+        tests1 = {test["name"]: test for test in results1.get("tests", [])}
+        tests2 = {test["name"]: test for test in results2.get("tests", [])}
         
-        # Compare performance
-        for test_file in all_test_files:
-            comparison['performance'][test_file] = {}
-            
-            for session in sessions:
-                session_id = session.session_id
-                
-                for test_file_result in session.test_results.get('test_files', []):
-                    if test_file_result.get('file_path', '') == test_file:
-                        result = test_file_result.get('result', {})
-                        comparison['performance'][test_file][session_id] = result.get('execution_time', 0.0)
+        # Find tests in both sessions
+        for name, test1 in tests1.items():
+            if name in tests2:
+                test2 = tests2[name]
+                if test1["status"] != test2["status"]:
+                    test_diffs.append({
+                        "name": name,
+                        "status1": test1["status"],
+                        "status2": test2["status"]
+                    })
         
-        # Generate summary
-        consistent_results = 0
-        inconsistent_results = 0
+        # Find tests only in session 1
+        only_in_1 = [name for name in tests1 if name not in tests2]
         
-        for test_file, results in comparison['test_results'].items():
-            statuses = set()
-            for session_id, result in results.items():
-                if result:
-                    statuses.add(result.get('status', 'unknown'))
-            
-            if len(statuses) == 1:
-                consistent_results += 1
-            elif len(statuses) > 1:
-                inconsistent_results += 1
+        # Find tests only in session 2
+        only_in_2 = [name for name in tests2 if name not in tests1]
         
-        comparison['summary'] = {
-            'total_test_files': len(all_test_files),
-            'consistent_results': consistent_results,
-            'inconsistent_results': inconsistent_results
+        comparison["differences"]["tests"] = {
+            "changed": test_diffs,
+            "only_in_session1": only_in_1,
+            "only_in_session2": only_in_2
         }
         
+        logger.info(f"Compared sessions {session_id1} and {session_id2}")
         return comparison
     
-    def cleanup_old_sessions(self, days: int = 30) -> int:
+    def log_action(self, action_type: str, prompt: str, result: Dict[str, Any]) -> None:
         """
-        Delete sessions older than the specified number of days.
+        Log an action to the database.
         
         Args:
-            days: Number of days to keep sessions for.
-            
-        Returns:
-            Number of sessions deleted.
+            action_type: Type of action.
+            prompt: User prompt or request.
+            result: Result of the action.
         """
-        logger.info(f"Cleaning up sessions older than {days} days")
-        
-        # Calculate cutoff date
-        cutoff_date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
-        
-        conn = sqlite3.connect(self.db_file)
+        # Connect to the database
+        conn = sqlite3.connect(self.database_path)
         cursor = conn.cursor()
         
-        # Get sessions to delete
-        cursor.execute('''
-        SELECT session_id, data_file FROM sessions WHERE start_time < ?
-        ''', (cutoff_date,))
-        
-        sessions_to_delete = cursor.fetchall()
-        
-        # Delete each session
-        deleted_count = 0
-        for session_id, data_file in sessions_to_delete:
-            # Skip current session
-            if self.current_session and self.current_session.session_id == session_id:
-                continue
-            
-            # Delete from database
-            cursor.execute('''
-            DELETE FROM screenshots WHERE session_id = ?
-            ''', (session_id,))
-            
-            cursor.execute('''
-            DELETE FROM test_results WHERE session_id = ?
-            ''', (session_id,))
-            
-            cursor.execute('''
-            DELETE FROM sessions WHERE session_id = ?
-            ''', (session_id,))
-            
-            # Delete data file
-            try:
-                if os.path.exists(data_file):
-                    os.remove(data_file)
-            except Exception as e:
-                logger.error(f"Error deleting data file {data_file}: {e}")
-            
-            deleted_count += 1
+        # Insert the action
+        cursor.execute(
+            "INSERT INTO actions (action_type, prompt, result, timestamp) VALUES (?, ?, ?, ?)",
+            (
+                action_type,
+                prompt,
+                json.dumps(result),
+                datetime.now().isoformat()
+            )
+        )
         
         conn.commit()
         conn.close()
         
-        logger.info(f"Deleted {deleted_count} old sessions")
-        
-        return deleted_count
+        logger.info(f"Logged action of type '{action_type}'")
     
-    def export_sessions_to_csv(self, output_file: str, 
-                              filters: Optional[Dict[str, Any]] = None) -> bool:
+    def export(self, format: str = "json") -> str:
         """
-        Export sessions to a CSV file.
+        Export test history to a file.
         
         Args:
-            output_file: Path to the output CSV file.
-            filters: Optional filters to apply.
+            format: Export format (json, csv).
             
         Returns:
-            True if the export was successful, False otherwise.
+            Path to the export file.
         """
-        logger.info(f"Exporting sessions to CSV: {output_file}")
+        # Get the history
+        history = self.get_history(limit=100)  # Export up to 100 entries
         
-        try:
-            # Get sessions
-            sessions = self.get_sessions(limit=1000, filters=filters)
-            
-            if not sessions:
-                logger.warning("No sessions to export")
-                return False
-            
-            # Write to CSV
-            with open(output_file, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=[
-                    'session_id', 'start_time', 'end_time', 'status',
-                    'total_tests', 'passed_tests', 'failed_tests', 'skipped_tests'
-                ])
-                
-                writer.writeheader()
-                
-                for session in sessions:
-                    # Remove metadata and data_file fields
-                    session_data = {k: v for k, v in session.items() 
-                                   if k not in ['metadata', 'data_file']}
-                    writer.writerow(session_data)
-            
-            logger.info(f"Exported {len(sessions)} sessions to {output_file}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error exporting sessions to CSV: {e}")
-            return False
-    
-    def export_sessions_to_json(self, output_file: str, 
-                               filters: Optional[Dict[str, Any]] = None) -> bool:
-        """
-        Export sessions to a JSON file.
+        # Create export directory if it doesn't exist
+        export_dir = os.path.join(os.path.dirname(self.database_path), "exports")
+        os.makedirs(export_dir, exist_ok=True)
         
-        Args:
-            output_file: Path to the output JSON file.
-            filters: Optional filters to apply.
-            
-        Returns:
-            True if the export was successful, False otherwise.
-        """
-        logger.info(f"Exporting sessions to JSON: {output_file}")
+        # Generate export filename
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        export_path = os.path.join(export_dir, f"history_export_{timestamp}.{format}")
         
-        try:
-            # Get sessions
-            sessions = self.get_sessions(limit=1000, filters=filters)
-            
-            if not sessions:
-                logger.warning("No sessions to export")
-                return False
-            
-            # Write to JSON
-            with open(output_file, 'w') as f:
-                json.dump(sessions, f, indent=2)
-            
-            logger.info(f"Exported {len(sessions)} sessions to {output_file}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error exporting sessions to JSON: {e}")
-            return False
-    
-    def generate_history_visualization(self, output_file: str, 
-                                      days: int = 30) -> bool:
-        """
-        Generate a visualization of test history.
+        if format == "json":
+            # Export to JSON
+            with open(export_path, "w") as f:
+                json.dump(history, f, indent=2)
+        elif format == "csv":
+            # Export to CSV
+            with open(export_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["ID", "Name", "Date", "Test Path", "Status", "Pass Rate"])
+                for entry in history:
+                    writer.writerow([
+                        entry["id"],
+                        entry["name"],
+                        entry["date"],
+                        entry["test_path"],
+                        entry["status"],
+                        entry["pass_rate"]
+                    ])
+        else:
+            logger.error(f"Unsupported export format: {format}")
+            return ""
         
-        Args:
-            output_file: Path to the output image file.
-            days: Number of days to include in the visualization.
-            
-        Returns:
-            True if the visualization was generated successfully, False otherwise.
-        """
-        logger.info(f"Generating test history visualization for the last {days} days")
-        
-        try:
-            # Calculate start date
-            start_date = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
-            
-            # Get sessions
-            conn = sqlite3.connect(self.db_file)
-            
-            # Query to get daily test counts
-            query = """
-            SELECT 
-                date(start_time) as date,
-                COUNT(*) as total_sessions,
-                SUM(total_tests) as total_tests,
-                SUM(passed_tests) as passed_tests,
-                SUM(failed_tests) as failed_tests
-            FROM sessions
-            WHERE start_time >= ?
-            GROUP BY date(start_time)
-            ORDER BY date
-            """
-            
-            # Load data into pandas DataFrame
-            df = pd.read_sql_query(query, conn, params=(start_date,))
-            
-            if df.empty:
-                logger.warning("No data available for visualization")
-                return False
-            
-            # Create visualization
-            plt.figure(figsize=(12, 8))
-            
-            # Plot test counts
-            ax1 = plt.subplot(2, 1, 1)
-            ax1.plot(df['date'], df['total_tests'], 'b-', label='Total Tests')
-            ax1.plot(df['date'], df['passed_tests'], 'g-', label='Passed Tests')
-            ax1.plot(df['date'], df['failed_tests'], 'r-', label='Failed Tests')
-            ax1.set_title('Test Execution History')
-            ax1.set_xlabel('Date')
-            ax1.set_ylabel('Number of Tests')
-            ax1.legend()
-            ax1.grid(True)
-            
-            # Plot success rate
-            ax2 = plt.subplot(2, 1, 2)
-            success_rate = (df['passed_tests'] / df['total_tests'] * 100).fillna(0)
-            ax2.bar(df['date'], success_rate, color='green', alpha=0.7)
-            ax2.set_title('Test Success Rate')
-            ax2.set_xlabel('Date')
-            ax2.set_ylabel('Success Rate (%)')
-            ax2.set_ylim(0, 100)
-            ax2.grid(True)
-            
-            plt.tight_layout()
-            plt.savefig(output_file)
-            plt.close()
-            
-            logger.info(f"Visualization saved to {output_file}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error generating visualization: {e}")
-            return False
+        logger.info(f"Exported history to {export_path}")
+        return export_path
