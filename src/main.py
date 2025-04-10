@@ -7,8 +7,9 @@ import argparse
 import logging
 from dotenv import load_dotenv
 
-from core import AIQAAgent
-from utils import setup_logger, start_webui
+from .core.agent import AIQAAgent
+from .utils.logger import setup_logger
+from .ui.webui_enhanced import start_webui
 
 def main():
     """Main entry point for the AI QA Agent."""
