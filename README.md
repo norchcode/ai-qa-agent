@@ -1,12 +1,9 @@
 # AI QA Agent
 
-[![CI Status](https://github.com/norchcode/ai-qa-agent/workflows/AI%20QA%20Agent%20CI/badge.svg)](https://github.com/norchcode/ai-qa-agent/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An AI-powered QA automation agent that combines LLM capabilities with traditional testing tools to create, execute, and analyze tests.
-
-![AI QA Agent Demo](https://via.placeholder.com/800x400?text=AI+QA+Agent+Demo)
 
 ## 📋 Table of Contents
 
